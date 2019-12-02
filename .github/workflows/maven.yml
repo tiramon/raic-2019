@@ -15,10 +15,5 @@ jobs:
         java-version: 1.8
     - name: Build with Maven
       run: mvn -B package --file pom.xml
-    - name: Publish GitHub Action
-      uses: TG908/publish-github-action@v1.1.8
-      with:
-        # Token for the github API
-        github_token: 
-    - name: Publish
-      run: mvn deploy -Dregistry=https://maven.pkg.github.com/tiramon -Dtoken=GH_TOKEN
+#    - name: Publish
+#      run: mvn deploy -Dregistry=https://maven.pkg.github.com/tiramon -Dtoken=GH_TOKEN
