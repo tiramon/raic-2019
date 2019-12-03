@@ -10,21 +10,31 @@ import com.google.gson.Gson;
 public class BatchRunner {
 	public static void main(String[] args) throws IOException, InterruptedException {
 		Gson gson = new Gson();
-		File workingDirectory = new File("C:\\Users\\jha\\Downloads\\aicup2019-windows\\");
+		File borJar = new File(args[0]);
+		if (!borJar.exists())
+			throw new RuntimeException("Bot jar does not exist");
+
+		File workingDirectory = new File(args[1]);
 		if (!workingDirectory.exists())
-			throw new RuntimeException();
+			throw new RuntimeException("Folder of Runner does not exist");
 		String filename = "aicup2019.exe";
 		File executable = new File(workingDirectory, filename);
 		if (!executable.exists())
-			throw new RuntimeException();
+			throw new RuntimeException("aicup2109.exe does not exist");
+
+		ProcessBuilder botProcess = new ProcessBuilder("java", "-cp", borJar.getAbsolutePath(), "Runner");
+		botProcess.inheritIO();
+
 		for (int i = 0; i < 10; i++) {
 			File result = new File(workingDirectory, "save/a" + i);
 			ProcessBuilder builder = new ProcessBuilder(executable.getAbsolutePath(), "--batch-mode", "--config",
-					"config2.json", "--save-results", "save/a" + i, "--save-replay", "replay/a" + i);
-
+					"config.json", "--save-results", "save/a" + i, "--save-replay", "replay/a" + i);
 			builder.directory(workingDirectory);
 			builder.inheritIO();
-			Process process = builder.start();
+			builder.start();
+
+			Process process = botProcess.start();
+
 			process.waitFor();
 
 			String resultContent = Files.lines(result.toPath()).collect(Collectors.joining(""));
