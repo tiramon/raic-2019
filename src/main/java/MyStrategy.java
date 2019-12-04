@@ -1,7 +1,8 @@
+import java.util.Arrays;
+
 import model.CustomData;
 import model.Game;
 import model.Item;
-import model.Item.Weapon;
 import model.LootBox;
 import model.Tile;
 import model.Unit;
@@ -29,6 +30,7 @@ public class MyStrategy {
 	// only charge with better weapon
 
 	public UnitAction getAction(Unit unit, Game game, Debug debug) {
+		Bresenham.init(game.getLevel().getTiles().length, game.getLevel().getTiles()[0].length, game.getUnits(), game.getLevel().getTiles());
 
 		Unit nearestEnemy = getNearestEnemy(unit, game);
 		LootBox nearestWeapon = getNearestLootBox(unit, game);
@@ -49,25 +51,34 @@ public class MyStrategy {
 		Vec2Double aim = new Vec2Double(0, 0);
 		// if there is an enemy aim for him
 		if (nearestEnemy != null) {
-			aim = new Vec2Double(nearestEnemy.getPosition().getX() - unit.getPosition().getX(),
-					nearestEnemy.getPosition().getY() - unit.getPosition().getY());
+			aim = new Vec2Double(nearestEnemy.getPosition().getX() - unit.getPosition().getX(), nearestEnemy.getPosition().getY() - unit.getPosition().getY());
 		}
 		// move upward?
 		boolean jump = targetPos.getY() > unit.getPosition().getY();
-		if (targetPos.getX() > unit.getPosition().getX() && game.getLevel()
-				.getTiles()[(int) (unit.getPosition().getX() + 1)][(int) (unit.getPosition().getY())] == Tile.WALL) {
+		if (targetPos.getX() > unit.getPosition().getX() && game.getLevel().getTiles()[(int) (unit.getPosition().getX() + 1)][(int) (unit.getPosition().getY())] == Tile.WALL) {
 			jump = true;
 		}
 		// move downward
-		if (targetPos.getX() < unit.getPosition().getX() && game.getLevel()
-				.getTiles()[(int) (unit.getPosition().getX() - 1)][(int) (unit.getPosition().getY())] == Tile.WALL) {
+		if (targetPos.getX() < unit.getPosition().getX() && game.getLevel().getTiles()[(int) (unit.getPosition().getX() - 1)][(int) (unit.getPosition().getY())] == Tile.WALL) {
 			jump = true;
 		}
 
 		// compare current weapon with lootbox weapon
 		boolean swap = false;
-		if (unit.getWeapon().getTyp().discriminant < ((Weapon) nearestWeapon.getItem()).getWeaponType().discriminant) {
-			swap = true;
+		// if (unit != null && unit.getWeapon() != null && nearestWeapon != null && unit.getWeapon().getTyp().discriminant < ((Weapon) nearestWeapon.getItem()).getWeaponType().discriminant) {
+		// swap = true;
+		// }
+		boolean shoot = true;
+		model.Weapon currentWeapon = unit.getWeapon();
+		if (nearestEnemy != null && currentWeapon != null) {
+			double distanceEnemy = distanceSqr(nearestEnemy.getPosition(), unit.getPosition());
+
+			boolean hasLos = lineOfSight(unit.getPosition(), nearestEnemy.getPosition());
+			boolean outOfExplosionRange = !isExplosionWeapon(currentWeapon) || currentWeapon.getParams().getExplosion().getRadius() > distanceEnemy;
+			shoot = hasLos && outOfExplosionRange;
+			if (shoot) {
+				targetPos = unit.getPosition();
+			}
 		}
 
 		UnitAction action = new UnitAction();
@@ -75,18 +86,28 @@ public class MyStrategy {
 		action.setJump(jump);
 		action.setJumpDown(!jump);
 		action.setAim(aim);
-		action.setShoot(true);
+		action.setShoot(shoot);
 		action.setSwapWeapon(swap);
 		action.setPlantMine(false);
 		return action;
+	}
+
+	public boolean lineOfSight(Vec2Double pos1, Vec2Double pos2) {
+		if (pos1.getY() < pos2.getY())
+			return Bresenham.calculateLine(pos1, pos2);
+		else
+			return Bresenham.calculateLine(pos2, pos1);
+	}
+
+	public boolean isExplosionWeapon(model.Weapon weapon) {
+		return weapon != null && weapon.getParams() != null && weapon.getParams().getExplosion() != null && weapon.getParams().getExplosion().getRadius() > 0d;
 	}
 
 	public LootBox getNearestLootBox(Unit unit, Game game) {
 		LootBox nearestWeapon = null;
 		for (LootBox lootBox : game.getLootBoxes()) {
 			if (lootBox.getItem() instanceof Item.Weapon) {
-				if (nearestWeapon == null || distanceSqr(unit.getPosition(),
-						lootBox.getPosition()) < distanceSqr(unit.getPosition(), nearestWeapon.getPosition())) {
+				if (nearestWeapon == null || distanceSqr(unit.getPosition(), lootBox.getPosition()) < distanceSqr(unit.getPosition(), nearestWeapon.getPosition())) {
 					nearestWeapon = lootBox;
 				}
 
@@ -99,12 +120,68 @@ public class MyStrategy {
 		Unit nearestEnemy = null;
 		for (Unit other : game.getUnits()) {
 			if (other.getPlayerId() != unit.getPlayerId()) {
-				if (nearestEnemy == null || distanceSqr(unit.getPosition(),
-						other.getPosition()) < distanceSqr(unit.getPosition(), nearestEnemy.getPosition())) {
+				if (nearestEnemy == null || distanceSqr(unit.getPosition(), other.getPosition()) < distanceSqr(unit.getPosition(), nearestEnemy.getPosition())) {
 					nearestEnemy = other;
 				}
 			}
 		}
+
 		return nearestEnemy;
 	}
+}
+
+class Bresenham {
+	static boolean[][] blocked;
+
+	public static void init(int width, int height, Unit[] units, Tile[][] tiles) {
+		blocked = new boolean[width][height];
+		Arrays.stream(units).forEach(u -> blocked[(int) u.getPosition().getX()][(int) u.getPosition().getY()] = true);
+		// cells.stream().filter(u -> u.empty == false).forEach(c -> blocked[c.x][c.getPosition().getY()] = true);
+		for (int i = 0; i < tiles.length; i++) {
+			for (int j = 0; j < tiles[i].length; j++) {
+				blocked[i][j] = tiles[i][j].equals(Tile.WALL);
+			}
+		}
+	}
+
+	public static boolean calculateLine(model.Vec2Double pos1, model.Vec2Double pos2) {
+		int p1x = (int) pos1.getX();
+		int p1y = (int) pos1.getY();
+		int p2x = (int) pos2.getX();
+		int p2y = (int) pos2.getY();
+		// Console.Error.WriteLine("los "+ first.x+"/"+first.y + " -> " + last.x+"/"+last.y);
+		int deltaX = Math.abs(p2x - p1x);
+		int deltaY = Math.abs(p2y - p1y);
+
+		int signalX = p1x < p2x ? 1 : -1;
+		int signalY = p1y < p2y ? 1 : -1;
+
+		int error = deltaX - deltaY;
+
+		int doubleError;
+		int newPosX = p1x;
+		int newPosY = p1y;
+
+		while (true) {
+			doubleError = 2 * error;
+
+			if (doubleError > -1 * deltaY) {
+				error -= deltaY;
+				newPosX = newPosX + signalX;
+			}
+
+			if (doubleError < deltaX) {
+				error += deltaX;
+				newPosY = newPosY + signalY;
+			}
+
+			if (newPosX == p2x && newPosY == p2y) {
+				return true;
+			}
+			if (blocked[newPosX][newPosY]) {
+				return false;
+			}
+		}
+	}
+
 }
