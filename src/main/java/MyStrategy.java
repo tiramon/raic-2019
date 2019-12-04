@@ -78,7 +78,7 @@ public class MyStrategy {
 		}
 		// if we have a weapon get nearest enemy
 		else if (nearestEnemy != null) {
-			debug.draw(new CustomData.Log("Weapon: BS - " + unit.getWeapon().getParams().getBullet().getSpeed() + " Spread " + unit.getWeapon().getParams().getMinSpread() + "/" + unit.getWeapon().getParams().getMaxSpread() + " R " + unit.getWeapon().getParams().getRecoil()));
+			debug.draw(new CustomData.Log("Weapon: BS - " + unit.getWeapon().getParams().getBullet().getSpeed() + " Spread " + unit.getWeapon().getParams().getMinSpread() + "/" + unit.getWeapon().getParams().getMaxSpread() + " R " + unit.getWeapon().getParams().getRecoil() + " Reload " + unit.getWeapon().getFireTimer()));
 			targetPos = nearestEnemy.getPosition();
 		}
 
@@ -155,10 +155,11 @@ public class MyStrategy {
 
 			boolean hasLos = lineOfSight(unit.getPosition(), aimTarget, yfix);
 			boolean outOfExplosionRange = !isExplosionWeapon(currentWeapon) || currentWeapon.getParams().getExplosion().getRadius() > distanceEnemy;
-			shoot = hasLos && outOfExplosionRange;
-			if (shoot) {
-				targetPos = unit.getPosition();
-			}
+			// shoot = hasLos && outOfExplosionRange;
+			shoot = hasLos || !isExplosionWeapon(currentWeapon);
+			// if (shoot) {
+			// targetPos = unit.getPosition();
+			// }
 		}
 
 		// if (unit.getWeapon().getTyp().discriminant < ((Weapon) nearestWeapon.getItem()).getWeaponType().discriminant) {
