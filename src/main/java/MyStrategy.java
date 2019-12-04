@@ -146,10 +146,14 @@ public class MyStrategy {
 		// }
 		boolean shoot = true;
 		model.Weapon currentWeapon = unit.getWeapon();
-		if (nearestEnemy != null && currentWeapon != null) {
-			double distanceEnemy = distanceSqr(nearestEnemy.getPosition(), unit.getPosition());
 
-			boolean hasLos = lineOfSight(unit.getPosition(), nearestEnemy.getPosition());
+		Vec2Double aimTarget = add(unit.getPosition(), aim);
+		double yfix = unit.getSize().getY() / 2d;
+
+		if (nearestEnemy != null && currentWeapon != null) {
+			double distanceEnemy = distanceSqr(aimTarget, unit.getPosition());
+
+			boolean hasLos = lineOfSight(unit.getPosition(), aimTarget, yfix);
 			boolean outOfExplosionRange = !isExplosionWeapon(currentWeapon) || currentWeapon.getParams().getExplosion().getRadius() > distanceEnemy;
 			shoot = hasLos && outOfExplosionRange;
 			if (shoot) {
@@ -161,8 +165,7 @@ public class MyStrategy {
 		// swap = true;
 		// }
 
-		Vec2Double aimTarget = add(unit.getPosition(), aim);
-		debug.draw(new CustomData.Line(new Vec2Float((float) unit.getPosition().getX(), (float) unit.getPosition().getY()), new Vec2Float((float) aimTarget.getX(), (float) aimTarget.getY()), 0.05f, new ColorFloat(1, 0, 0, 1)));
+		debug.draw(new CustomData.Line(new Vec2Float((float) unit.getPosition().getX(), (float) (unit.getPosition().getY() + yfix)), new Vec2Float((float) aimTarget.getX(), (float) (aimTarget.getY() + yfix)), 0.05f, new ColorFloat(1, 0, 0, 1)));
 
 		UnitAction action = new UnitAction();
 		action.setVelocity(targetPos.getX() - unit.getPosition().getX());
@@ -175,11 +178,13 @@ public class MyStrategy {
 		return action;
 	}
 
-	public boolean lineOfSight(Vec2Double pos1, Vec2Double pos2) {
-		if (pos1.getY() < pos2.getY())
-			return Bresenham.calculateLine(pos1, pos2);
+	public boolean lineOfSight(Vec2Double pos1, Vec2Double pos2, double yfix) {
+		Vec2Double pos1Fixed = new Vec2Double(pos1.getX(), pos1.getY() + yfix);
+		Vec2Double pos2Fixed = new Vec2Double(pos2.getX(), pos2.getY() + yfix);
+		if (pos1Fixed.getY() < pos2Fixed.getY())
+			return Bresenham.calculateLine(pos1Fixed, pos2Fixed);
 		else
-			return Bresenham.calculateLine(pos2, pos1);
+			return Bresenham.calculateLine(pos1Fixed, pos2Fixed);
 	}
 
 	public boolean isExplosionWeapon(model.Weapon weapon) {
