@@ -57,9 +57,10 @@ public class BatchRunner {
 		int games = 500;
 		for (int i = 0; i < games; i++) {
 			File result = new File(workingDirectory, "save/a" + i);
-			ProcessBuilder builder = new ProcessBuilder(executable.getAbsolutePath(), "--batch-mode", "--config", borJar2 != null ? "multiplayer.json" : "config.json", "--save-results", "save/a" + i, "--save-replay", "replay/a" + i);
+			ProcessBuilder builder = new ProcessBuilder(executable.getAbsolutePath(), "--batch-mode", "--config", borJar2 != null ? "multiplayer.json" : "config.json", "--save-results", "save/a" + i);
+			// , "--save-replay", "replay/a" + i);
 			builder.directory(workingDirectory);
-			builder.inheritIO();
+			// builder.inheritIO();
 			builder.start();
 			System.out.println("started agent:" + builder.command().stream().collect(Collectors.joining(" ")));
 
@@ -83,6 +84,6 @@ public class BatchRunner {
 			}
 
 		}
-		System.out.println("Wins " + win[0] + "/" + win[1] + " " + (100 * win[0] / games) + "%/" + (100 * win[1] / games) + "%");
+		System.out.println("Wins " + win[0] + "/" + win[1] + " draw " + (games - win[0] - win[1]) + " " + (100 * win[0] / games) + "%/" + (100 * win[1] / games) + "% ");
 	}
 }

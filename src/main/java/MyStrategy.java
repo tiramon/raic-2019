@@ -2,6 +2,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
+import model.Bullet;
 import model.ColorFloat;
 import model.CustomData;
 import model.Game;
@@ -65,7 +66,7 @@ public class MyStrategy {
 		}
 		Arrays.stream(game.getUnits()).forEach(u -> lastPosition.put(u.getId(), u.getPosition()));
 		LootBox nearestWeapon = getNearestWeaponLootBox(unit, game);
-		LootBox nearestHealth = getNearestHealthLootBox(unit, game);
+		LootBox nearestHealth = getNearestHealthLootBox(unit, game, nearestEnemy);
 
 		// **************************
 		// Choose target to move to
@@ -74,15 +75,30 @@ public class MyStrategy {
 		// if no current weapon, get nearestWeapon
 		if (unit.getWeapon() == null && nearestWeapon != null) {
 
-			targetPos = nearestWeapon.getPosition();
+			targetPos = getCenter(nearestWeapon);
+		} else if (nearestHealth != null && 100 - unit.getHealth() > game.getProperties().getHealthPackHealth() * 0.6) {
+			targetPos = getCenter(nearestHealth);
 		}
 		// if we have a weapon get nearest enemy
 		else if (nearestEnemy != null) {
 			debug.draw(new CustomData.Log("Weapon: BS - " + unit.getWeapon().getParams().getBullet().getSpeed() + " Spread " + unit.getWeapon().getParams().getMinSpread() + "/" + unit.getWeapon().getParams().getMaxSpread() + " R " + unit.getWeapon().getParams().getRecoil() + " Reload " + unit.getWeapon().getFireTimer()));
-			targetPos = nearestEnemy.getPosition();
+			targetPos = new Vec2Double(nearestEnemy.getPosition().getX(), nearestEnemy.getPosition().getY());
+
+			double ydif = targetPos.getY() - unit.getPosition().getY();
+			if (Math.abs(ydif) < 0.2) {
+				targetPos.setY(unit.getPosition().getY());
+			}
+
+			if (isExplosionWeapon(unit.getWeapon())) {
+				double r = unit.getWeapon().getParams().getExplosion().getRadius();
+				if (unit.getPosition().getX() < targetPos.getX())
+					targetPos.setX(targetPos.getX() - r * 1.5);
+				else
+					targetPos.setX(targetPos.getX() + r * 1.5);
+			}
 		}
 
-		debug.draw(new CustomData.Log("own pos: " + unit.getPosition().getX() + "/" + unit.getPosition().getY()));
+		debug.draw(new CustomData.Log("own pos: " + unit.getPosition().getX() + "/" + unit.getPosition().getY() + " h " + unit.getHealth()));
 		debug.draw(new CustomData.Log("Target pos: " + targetPos.getX() + "/" + targetPos.getY()));
 		debug.draw(new CustomData.Log("Target vel: " + lastVel.getX() + "/" + lastVel.getY()));
 
@@ -114,7 +130,7 @@ public class MyStrategy {
 				double sqrDistance = distanceSqr(posEnemy, unit.getPosition());
 				double sqrRound = sqrDistance / sqrTickBulletSpeed;
 				if (sqrRound < i * i) {
-					System.err.println(i);
+					// System.err.println(i);
 					aimTicksAhead = i;
 					break;
 				}
@@ -155,8 +171,8 @@ public class MyStrategy {
 
 			boolean hasLos = lineOfSight(unit.getPosition(), aimTarget, yfix);
 			boolean outOfExplosionRange = !isExplosionWeapon(currentWeapon) || currentWeapon.getParams().getExplosion().getRadius() > distanceEnemy;
-			// shoot = hasLos && outOfExplosionRange;
-			shoot = hasLos || !isExplosionWeapon(currentWeapon);
+			shoot = hasLos && outOfExplosionRange;
+			// shoot = hasLos || !isExplosionWeapon(currentWeapon);
 			// if (shoot) {
 			// targetPos = unit.getPosition();
 			// }
@@ -167,9 +183,15 @@ public class MyStrategy {
 		// }
 
 		debug.draw(new CustomData.Line(new Vec2Float((float) unit.getPosition().getX(), (float) (unit.getPosition().getY() + yfix)), new Vec2Float((float) aimTarget.getX(), (float) (aimTarget.getY() + yfix)), 0.05f, new ColorFloat(1, 0, 0, 1)));
+		debug.draw(new CustomData.Rect(toFloat(targetPos), new Vec2Float(1, 1), new ColorFloat(1, 0, 0, 0.25f)));
+
+		for (Bullet b : game.getBullets()) {
+			// System.out.println("Bullet " + b.getUnitId() + " " + b.getPosition().getX() + "/" + b.getPosition().getY() + " " + b.getVelocity().getX() + "/" + b.getVelocity().getY());
+			debug.draw(new CustomData.Line(new Vec2Float((float) b.getPosition().getX(), (float) (b.getPosition().getY())), new Vec2Float((float) (b.getPosition().getX() + b.getVelocity().getX() * 3), (float) (b.getPosition().getX() + b.getVelocity().getY() * 3)), 0.05f, new ColorFloat(0, 1, 0, 1)));
+		}
 
 		UnitAction action = new UnitAction();
-		action.setVelocity(targetPos.getX() - unit.getPosition().getX());
+		action.setVelocity((targetPos.getX() - unit.getPosition().getX()) * 2);
 		action.setJump(jump);
 		action.setJumpDown(!jump);
 		action.setAim(aim);
@@ -177,6 +199,14 @@ public class MyStrategy {
 		action.setSwapWeapon(swap);
 		action.setPlantMine(false);
 		return action;
+	}
+
+	private Vec2Double getCenter(LootBox loot) {
+		return new Vec2Double(loot.getPosition().getX() - loot.getSize().getX() / 2, loot.getPosition().getY());
+	}
+
+	private Vec2Float toFloat(Vec2Double vec) {
+		return new Vec2Float((float) vec.getX(), (float) vec.getY());
 	}
 
 	public boolean lineOfSight(Vec2Double pos1, Vec2Double pos2, double yfix) {
@@ -204,16 +234,27 @@ public class MyStrategy {
 		return nearestWeapon;
 	}
 
-	public LootBox getNearestHealthLootBox(Unit unit, Game game) {
+	public LootBox getNearestHealthLootBox(Unit unit, Game game, Unit nearestEnemy) {
 		LootBox nearestHealth = null;
 		for (LootBox lootBox : game.getLootBoxes()) {
 			if (lootBox.getItem() instanceof Item.HealthPack) {
 				if (nearestHealth == null || distanceSqr(unit.getPosition(), lootBox.getPosition()) < distanceSqr(unit.getPosition(), nearestHealth.getPosition())) {
-					nearestHealth = lootBox;
+					if (nearestEnemy != null && !isBetween(nearestEnemy.getPosition(), lootBox.getPosition(), unit.getPosition())) {
+						nearestHealth = lootBox;
+					}
 				}
 			}
 		}
 		return nearestHealth;
+	}
+
+	private boolean isBetween(Vec2Double obstacle, Vec2Double pos1, Vec2Double pos2) {
+		if (obstacle.getX() < pos1.getX() && obstacle.getX() > pos2.getX()) {
+			return true;
+		} else if (obstacle.getX() > pos1.getX() && obstacle.getX() < pos2.getX()) {
+			return true;
+		}
+		return false;
 	}
 
 	public Unit getNearestEnemy(Unit unit, Game game) {
